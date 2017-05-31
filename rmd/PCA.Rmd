@@ -1,0 +1,283 @@
+---
+title: "Análisis de Componentes Principales"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval = FALSE)
+library(GGally)
+library(ggbiplot)
+library(dplyr)
+```
+
+![Fisher](https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/R._A._Fischer.jpg/200px-R._A._Fischer.jpg)
+
+En 1936, el biólogo y estadístico Ronald Fisher, recopila datos de 150 lirios (*Iris spp.*) para cuantificar la variación geográfica de estas flores en la Penínusula de Gaspé, en Canadá. 
+
+|  ![Iris setosa](https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Kosaciec_szczecinkowaty_Iris_setosa.jpg/180px-Kosaciec_szczecinkowaty_Iris_setosa.jpg) |  ![Iris versicolor](https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Iris_versicolor_3.jpg/220px-Iris_versicolor_3.jpg) |  ![Iris virginica](https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Iris_virginica.jpg/220px-Iris_virginica.jpg) |
+|---|---|---|
+|  *Iris setosa* | *Iris versicolor*  | *Iris virginica*  |
+
+Vamos a analizar estos datos con componentes principales. Pero primero vamos a 
+bajar el archivo del informe. Si no les funciona, copien la URL en el navegador
+y guarden el archivo.
+
+```{r informe}
+download.file("https://git.io/vHRvn", "Informe.Rmd")
+```
+
+
+Una vez hecho esto vamos a cargar los datos. Los mismos forman parte de los 
+conjuntos de datos que R trae cargados por defecto. Estos datos pueden cargar
+en el espacio de trabajo usando la función `data()`
+
+```{r cargar-data}
+data("iris")
+```
+
+Siempre es importante realizar un análisis exploratorio de los datos para 
+verificar que no haya nada raro y también tener una idea de que distribución
+tienen. Lo más rápido y conveniente es realizar una matriz de gráficos.
+
+```{r ggpairs}
+ggpairs(iris)
+```
+
+¿Que variables tienen mayor correlación entre si? ¿Cuáles tienen menos?
+
+
+El gráfico nos da mucha información, pero podría mejorarse. Si lo vemos así,
+parece que la distribución de largo y ancho de pétalos es bimodal ¡Pero tenemos
+tres especies! Seguramente, esto se debe a que cada especie tiene su propia
+distribución. Agregemos un poco de color al gráfico y veamos si es cierto.
+
+```{r ggpairs-color}
+ggpairs(iris, aes(color = Species))
+```
+
+¿Es cierto que la bimodalidad se debía a que cada especie tiene su propia distribución para las variables?
+
+
+Los datos parecen estar bien, por lo que vamos a realizar el análisis de 
+componentes principales. Recordemos que el objetivo de está técnica es crear
+nuevas variables (ejes) que resuman la mayor cantidad de variación de la datos.
+Y que cada eje es ortogonal al resto por lo que están totalmente incorrelados.
+En **R** existen varias funciones que realizan el análisis de componentes 
+principales. Los detalles son un poco arcanos para este curso, pero basta decir
+que la que vamos a usar, `prcomp()` tiene resultados más precisos. Esta función
+tiene varios argumentos; entre los más importantes vamos a mencionar 
+`center` un argumento lógico (VERDADERO o FALSO) que indica si las variables
+deben ser centradas, y `scale` también un argumento lógico que indica si las
+variables deben ser escaladas para que la varianza sea 1.
+
+Si trabajamos con las variables sin escalar usamos la matriz de
+varianza-covarianza ¿Con qué matriz trabajamos si las usamos escaladas?
+
+
+Vamos a empezar usando la matriz de varianza-covarianza. Primero creamos
+un nuevo conjunto de datos con solo los datos númericos. Para estas 
+variables es recomendado aplicar el logaritmo para estabilizar las varianzas.
+```{r pca}
+iris_mat <- iris %>% 
+  select_if(is.numeric) %>% 
+  log
+
+iris_pca <- prcomp(iris_mat, center = TRUE) 
+iris_pca
+```
+
+Al llamar al objeto que contiene el resultado del ACP no devuelve un pequeño
+resumen. Los desvios estándar, es decir la raíz de los autovalores, y la 
+matriz de autovectores. Comprobemos lo que vimos en teoría sobre esta matriz.
+Los vectores tienen longitud igual a 1. Así que si sumamos en filas o en 
+columnas debería dar 1. Para facilitar los cálculos vamos a crear una 
+función que eleve cada valor al cuadrado y los sume.
+
+```{r sum-cuad, eval=TRUE}
+sum_cuad <- function(x) sum(x^2)
+```
+
+La función se llama `sum_cuad`. Hacer una función es bastante simple en **R**.
+Con `function` se crea la función y se pone los argumentos que va a tener. En
+este caso solo `x`. Lo que va hacer la función va a tomar los valores que 
+pongamos en x, elevarlos al cuadrado y luego sumarlos. Por ejemplo:
+
+```{r sum-cuad-test, eval=TRUE}
+sum_cuad(2)
+sum_cuad(c(2, 4, 6, 8))
+```
+
+Ahora que está lista la función, podemos usarla para sumar las columnas y las
+filas. Para sumar la primer columna, primero seleccionamos la matriz de rotación usando `$` y el nombre del objeto. Luego, entre corchetes la columna
+como las matrices tienen dos dimensiones (primero filas y luego columnas como en la notación matemática) y queremos todas las filas solo ponemos una `,` que indica que queremos todas las filas y luego un `1` que indica la primer columna.
+
+```{r}
+sum_cuad(iris_pca$rotation[, 1])
+```
+
+## Ejercicio 2
+Haga la suma para la segunda fila. ¿Cuanto debería dar cada una de las sumas 
+marginales?
+
+Si bien se puede hacer cada suma manualmente, resulta muy cansador y poco
+práctico. Para eso tenemos una computadora que haga el trabajo repetitivo por
+nosotros. Existe una función muy práctica, que puede aplicar otras funciones
+a las filas o columnas de un objeto. Los argumentos son `X` el objeto, `MARGIN`
+que es la marginal que queremos calcular 1=filas, 2=columnas:
+
+```{r}
+apply(iris_pca$rotation, 1, sum_cuad)
+apply(iris_pca$rotation, 2, sum_cuad)
+```
+
+## Ejercicio 3
+Basados en los los resultados de la sumatorias por filas y por columnas. 
+¿Que matriz de autovectores están viendo?
+
+
+Ahora vamos a escalar la matriz de autovectores por sus desvio estándar y 
+volver a sumar en filas y columnas la matriz resultante.
+```{r}
+iris_UA <- iris_pca$rotation %*% diag(iris_pca$sdev)
+apply(iris_UA, 2, sum_cuad)
+apply(iris_UA, 1, sum_cuad)
+```
+
+## Ejercicio 4
+¿A que es igual la suma por filas en la matriz anterior? ¿Y la suma de
+las columnas? Utilizen la función `cov()` sobre los datos `iris_mat` 
+¿Con que coinciden los valores de diagonal? ¿Qué son los valores de la diagonal? ¿Y si elevan al cuadrado los desvíos estándar del ACP?
+
+
+Como vimos anteriormente, el simbolo `$` sirve para seleccionar los 
+objetos de una lista. Seleccionemos solo los desvíos estándar:
+
+```{r}
+iris_pca$sdev
+```
+
+
+## Ejercicio 5
+
+¿Que porcentaje de la varianza explica cada eje principal? ¿Cómo se
+calcula?
+
+
+
+Una forma directa de saber esto es usando la función `summary()`.
+
+```{r}
+summary(iris_pca)
+```
+
+
+También es posible saber el porcentaje de reconstrucción de una variable en
+cada eje principal. Dado que la suma de los cuadrados cada fila de la matriz
+$\mathbf{U\Lambda}^{1/2}$ es igual a la varianza de variable
+$\sum_{k=1}^pu_jk=s_j^2 $. Por lo tanto, la suma de los cuadrados de cada eje
+divida la suma total es un porcentaje de la reconstrucción de esa variable
+en esos ejes.
+
+## Ejercicio 6 
+
+¿Que porcentaje de reconstrucción tiene cada una de las variables en los
+dos primeros ejes?
+
+
+Resulta muy util verlo graficado. La función de base es `biplot()` pero no
+produce gráficos atractivos y es complicada de modificar. Por eso vamos a usar
+una especifica que usa el paquete `ggplot2`, como casi todos los gráficos que
+usamos anteriormente. La función `ggbiplot()` tiene varios argumentos, 
+entre los más importantes `scale` que es algo complicado como está implementado
+pero resumiendo, si es `0` el gráfico corresponde a un *biplot de distancia* y
+si es `1` es un *biplot de correlación*. Empecemos por un biplot de correlación:
+
+```{r}
+g <- ggbiplot(iris_pca, obs.scale = 1, var.scale = 1,
+              groups = iris$Species,
+              ellipse = FALSE, 
+              circle = TRUE)
+g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top')
+print(g)
+```
+
+## Ejercicio 7
+Observando el gráfico anterior.
+¿Qué variables están más correlacionadas con el eje 1? ¿Qué variables
+lo están con el eje 2?
+
+Ahora veamos como se ve el biplot de distancia:
+
+```{r}
+g <- ggbiplot(iris_pca, obs.scale = 0, var.scale = 0,
+              groups = iris$Species,
+              ellipse = FALSE, 
+              circle = TRUE)
+g <- g + scale_color_discrete(name = '')
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = 'top')
+print(g)
+```
+
+## Ejercicio 8
+
+¿Qué puede concluir sobre las especies? ¿En que caracterísiticas se parecen?
+¿Qué especies son más parecidas?
+
+
+# Por su cuenta
+
+
+Estandaricen los datos de Iris y vuelvan a trabajar sobre ellos:
+
+```{r}
+iris_z <- scale(iris_mat, center = TRUE, scale = TRUE)
+```
+
+
+Respondan las siguientes preguntas
+
+## 1
+Haga la suma para la segunda fila. ¿Cuanto debería dar cada una de las sumas 
+marginales?
+
+
+## 2
+Basados en los los resultados de la sumatorias por filas y por columnas. 
+¿Que matriz de autovectores están viendo?
+
+## 3
+¿A que es igual la suma por filas en la matriz anterior? ¿Y la suma de
+las columnas? Utilizen la función `cor()` sobre los datos `iris_mat` 
+¿Con que coinciden los valores de diagonal? ¿Qué son los valores de la
+diagonal? ¿Y si elevan al cuadrado los desvíos estándar del ACP? 
+¿Como se diferencia esto de la parte donde trabajaron con las
+covarianzas?
+
+
+## 4
+
+¿Que porcentaje de la varianza explica cada eje principal? ¿Cómo se
+calcula?
+
+
+## 5 
+
+¿Que porcentaje de reconstrucción tiene cada una de las variables en los
+dos primeros ejes?
+
+
+## 6
+Observando el gráfico anterior.
+¿Qué variables están más correlacionadas con el eje 1? ¿Qué variables
+lo están con el eje 2?
+
+## 7
+
+¿Qué puede concluir sobre las especies? ¿En que caracterísiticas se parecen?
+¿Qué especies son más parecidas?
+
